@@ -118,6 +118,25 @@ simulate_r_dataframe <- function(r, n) {
 
 ```
 
+
+```{r Mason, message=FALSE,eval=FALSE}
+xsimulate_r_dataframe <- function(r, n, rep=1000) {
+  corr_values <- replicate(rep, simulate_r_practice2(r, n))
+  simulate_r_ds <- data.frame(id = 1:rep, corr = corr_values)
+  return(simulate_r_ds)
+}
+
+df <-list()
+n_cpnd <- c(50, 100, 200, 500, 1000)
+
+for(i in length(n_cpnd )) {
+   simulate_r_dataframe(.2, n_cpnd[i])
+  
+  df <- simulate_r_ds
+}
+```
+
+
 ```{r testing the simulate_r_dataframe function, message=FALSE}
 simulate_r_dataframe(.2, 50)
 ```
@@ -173,27 +192,25 @@ final_simulate_dataframe <- function(r, n) {
   corr_values <- replicate(10000, simulate_individual_r_final(r, n))
   simulate_r_ds <- data.frame(id = 1:10000, corr = corr_values, pop_r = r, n = n)
   df_name <- paste0("final_simulated_data_", r, "_", n)
-  assign(df_name, simulate_r_ds, envir = .GlobalEnv) 
+  return(simulate_r_ds)
 }
 
 ```
 
 ```{r creating the data sets - final, message=FALSE}
-final_simulate_dataframe(.10, 20)
-final_simulate_dataframe(.10, 50)
-final_simulate_dataframe(.10, 100)
-final_simulate_dataframe(.20, 20)
-final_simulate_dataframe(.20, 50)
-final_simulate_dataframe(.20, 100)
-final_simulate_dataframe(.30, 20)
-final_simulate_dataframe(.30, 50)
-final_simulate_dataframe(.30, 100)
-final_simulate_dataframe(.40, 20)
-final_simulate_dataframe(.40, 50)
-final_simulate_dataframe(.40, 100)
-final_simulate_dataframe(.50, 20)
-final_simulate_dataframe(.50, 50)
-final_simulate_dataframe(.50, 100)
+
+cor_r <- c(.10, .20, .30, .40, .50)
+n <- c(20, 50, 100, 200, 500, 1000)
+
+df_output <- data.frame()
+for(i in 1:length(cor_r)) {
+  for(j in 1:length(n)) {
+    temp <- final_simulate_dataframe(cor_r[i], n[j])
+   df_output <- rbind(df_output,temp)
+  }
+}
+
+
 
 ```
 
