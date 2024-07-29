@@ -281,6 +281,278 @@ of the goal, the product (computer program, hand graph, computer graph,
 etc.), the data, and some interpretation. Reports must be reproducible
 and of high quality in terms of writing, grammar, presentation, etc.</p>
 </blockquote>
+<p>The primary aim of this portfolio is to generate a distribution of
+sample correlation coefficients, given a certain n and population
+correlation. A secondary aim is to generate a plot of this distribution
+that I can share with my class.</p>
+<p>I’m starting by generating sample correlations themselves (rather
+than the data sets). I’m going to assume normality. Although this
+assumption is not fully accurate (esp. for larger correlations), it
+should be reasonably close. It will thus help serve as a “reality check”
+to ensure that my next approach is operating correctly.</p>
+<p>Note: Gnambs (2023) recommends the following formula for the standard
+deviation: (1-r2) / sqr (n-3)</p>
+<div id="load-packages-and-data" class="section level3">
+<h3>Load packages and data</h3>
+<pre class="r"><code>if (!require(&quot;ggplot2&quot;)) install.packages(&quot;ggplot2&quot;)
+library(ggplot2)
+if (!require(&quot;MASS&quot;)) install.packages(&quot;MASS&quot;)
+library(MASS)
+if (!require(&quot;tidyverse&quot;)) install.packages(&quot;tidyverse&quot;)
+library(tidyverse)</code></pre>
+<pre class="r"><code>set.seed(123)</code></pre>
+<p>For this example, the sd is approximately .14</p>
+<pre class="r"><code>corr_ds1 &lt;- data.frame(id = 1:10000, corr = rnorm(10000, mean = .20, sd = .14))</code></pre>
+<pre class="r"><code>ggplot(data = corr_ds1, mapping = aes(x = corr)) +
+  geom_histogram() +
+  labs(title = &quot;Distribution of Sample Correlations, r = .20, n = 50&quot;)</code></pre>
+<p><img src="p03_files/figure-html/creating-histogram-1.png" width="672" /></p>
+<p>This seems to work well. Before proceeding, I’d like to calculate the
+percentage of sample correlations that are less than zero.</p>
+<pre class="r"><code>corr_ds1 &lt;- corr_ds1 %&gt;%
+  mutate (neg_corr = case_when (
+    corr &lt; 0 ~ 1, 
+    corr &gt;= 0 ~ 0 ))
+perc_neg_corr &lt;- corr_ds1 %&gt;%
+  summarize(perc_neg = mean(neg_corr))</code></pre>
+<p>Trying this again using a formula for sd.</p>
+<pre class="r"><code>corr_ds2 &lt;- data.frame(id = 1:10000, corr = rnorm(10000, mean = .20, sd = (1-(.2)*(.2))/(sqrt(50-3))  ))</code></pre>
+<pre class="r"><code>corr_ds2 &lt;- corr_ds2 %&gt;%
+  mutate (neg_corr = case_when (
+    corr &lt; 0 ~ 1, 
+    corr &gt;= 0 ~ 0 ))
+perc_neg_corr2 &lt;- corr_ds2 %&gt;%
+  summarize(perc_neg = mean(neg_corr))</code></pre>
+<p>This computes the same percentage of negative correlations, so this
+is working well. This will be necessary when trying to turn this into a
+function.</p>
+<p>My next step is to do that – turn the above set of commands into a
+function.</p>
+<pre class="r"><code>simulate_r_practice &lt;- function(r) {
+  sample_r_practice &lt;- rnorm(1,mean = r, sd = (1-(r)*(r))/(sqrt(50-3))  ) 
+  return(sample_r_practice)
+} </code></pre>
+<p>Now trying it out</p>
+<pre class="r"><code>simulate_r_practice(.2)</code></pre>
+<pre><code>## [1] 0.08289304</code></pre>
+<p>This seems to work!</p>
+<p>Now I’m going to create another function, which includes both r and
+n.</p>
+<pre class="r"><code>simulate_r_practice2 &lt;- function(r,n) {
+  sample_r_practice2 &lt;- rnorm(1,mean = r, sd = (1-(r)*(r))/(sqrt(n-3))  ) 
+  return(sample_r_practice2)
+} </code></pre>
+<p>Now trying it out</p>
+<pre class="r"><code>simulate_r_practice2(.2, 50)</code></pre>
+<pre><code>## [1] 0.1691131</code></pre>
+<p>This also seems to work. Yea. Next, I will try to get it to generate
+the full data set of 10,000 individuals.</p>
+<pre class="r"><code>corr_ds &lt;- data.frame(id = 1:10000, corr = replicate (10000, simulate_r_practice2 (.2,50) ))</code></pre>
+<p>This worked well, but I didn’t get to specify the r and n, so doesn’t
+really do what I want.</p>
+<p>Now trying to create a function that creates the entire data
+frame.</p>
+<pre class="r"><code>simulate_r_dataframe &lt;- function(r, n) {
+  corr_values &lt;- replicate(10000, simulate_r_practice2(r, n))
+  simulate_r_ds &lt;- data.frame(id = 1:10000, corr = corr_values)
+  assign(&quot;simulated_data&quot;, simulate_r_ds, envir = .GlobalEnv) 
+}</code></pre>
+<pre class="r"><code>simulate_r_dataframe(.2, 50)</code></pre>
+<p>Okay, that finally worked. That was difficult. Now to add pop_r and n
+to the data file.</p>
+<pre class="r"><code>simulate_r_dataframe2 &lt;- function(r, n) {
+  corr_values &lt;- replicate(10000, simulate_r_practice2(r, n))
+  simulate_r_ds &lt;- data.frame(id = 1:10000, corr = corr_values, pop_r = r, n = n)
+  assign(&quot;simulated_data&quot;, simulate_r_ds, envir = .GlobalEnv) 
+}</code></pre>
+<pre class="r"><code>simulate_r_dataframe2(.2, 50)</code></pre>
+<p>Finally got something to work on the first try.</p>
+<p>Now I’m going to try to make my data frame have a name that includes
+the values entered in the function.</p>
+<pre class="r"><code>simulate_r_dataframe3 &lt;- function(r, n) {
+  corr_values &lt;- replicate(10000, simulate_r_practice2(r, n))
+  simulate_r_ds &lt;- data.frame(id = 1:10000, corr = corr_values, pop_r = r, n = n)
+  df_name &lt;- paste0(&quot;simulated_data_&quot;, r, &quot;_&quot;, n)
+  assign(df_name, simulate_r_ds, envir = .GlobalEnv) 
+}</code></pre>
+<pre class="r"><code>simulate_r_dataframe3(.20, 50)</code></pre>
+<p>It works.</p>
+<p>So at this point, I have a large number of files with all sorts of
+weird names. I’m going to now create a new set of data files with
+“final” in the name that will produce the final elements of what I
+want.</p>
+<pre class="r"><code>simulate_individual_r_final &lt;- function(r,n) {
+  simulate_individual_r_final &lt;- rnorm(1,mean = r, sd = (1-(r)*(r))/(sqrt(n-3))  ) 
+  return(simulate_individual_r_final)
+} </code></pre>
+<pre class="r"><code>final_simulate_dataframe &lt;- function(r, n) {
+  corr_values &lt;- replicate(10000, simulate_individual_r_final(r, n))
+  simulate_r_ds &lt;- data.frame(id = 1:10000, corr = corr_values, pop_r = r, n = n)
+  df_name &lt;- paste0(&quot;final_simulated_data_&quot;, r, &quot;_&quot;, n)
+  assign(df_name, simulate_r_ds, envir = .GlobalEnv) 
+}</code></pre>
+<pre class="r"><code>final_simulate_dataframe(.10, 20)
+final_simulate_dataframe(.10, 50)
+final_simulate_dataframe(.10, 100)
+final_simulate_dataframe(.20, 20)
+final_simulate_dataframe(.20, 50)
+final_simulate_dataframe(.20, 100)
+final_simulate_dataframe(.30, 20)
+final_simulate_dataframe(.30, 50)
+final_simulate_dataframe(.30, 100)
+final_simulate_dataframe(.40, 20)
+final_simulate_dataframe(.40, 50)
+final_simulate_dataframe(.40, 100)
+final_simulate_dataframe(.50, 20)
+final_simulate_dataframe(.50, 50)
+final_simulate_dataframe(.50, 100)</code></pre>
+<p>now need to bind the data files .</p>
+<pre class="r"><code>simulated_data_final &lt;- bind_rows(final_simulated_data_0.1_20, final_simulated_data_0.1_50, final_simulated_data_0.1_100, final_simulated_data_0.2_20, final_simulated_data_0.2_50, final_simulated_data_0.2_100, final_simulated_data_0.3_20, final_simulated_data_0.3_50, final_simulated_data_0.3_100, final_simulated_data_0.4_20, final_simulated_data_0.4_50, final_simulated_data_0.4_100, final_simulated_data_0.5_20, final_simulated_data_0.5_50, final_simulated_data_0.5_100)</code></pre>
+<p>Adding in the number of negative corrs.</p>
+<pre class="r"><code>simulated_data_final &lt;- simulated_data_final %&gt;%
+  mutate (neg_corr = case_when (
+    corr &lt; 0 ~ 1, 
+    corr &gt;= 0 ~ 0 ))
+perc_neg_corr_final &lt;- simulated_data_final %&gt;%
+   group_by(pop_r, n) %&gt;%
+  summarize(perc_neg = mean(neg_corr))</code></pre>
+<p>Okay, so this generated what I wanted. It does require me to go in
+and specify the names of the data frames to bind. Ideally that shouldn’t
+be necessary, but this has already taken 5-6 hours so I’m going to just
+go with that.</p>
+<p>So that worked well overall, but unfortunately, it’s really not the
+way to do this, because it’s assuming that r is normal, which it isn’t,
+especially for r’s far from 0. So I’m going to start over, generating
+values of x and y and computing r’s. Thankfully (I think…) once I can
+generate a data frame with r’s, I should be able to re-use the rest of
+my code to finish.</p>
+<p>First need to make sure I can get the commands to work with a certain
+correlation.</p>
+<pre class="r"><code># Define mean and covariance matrix
+mean_x_y &lt;- c(0, 0)
+cov_matrix &lt;- matrix(c(1, .20, 
+                       .20, 1), ncol = 2)
+
+# Generate correlated data
+x_y_data_matrix_practice &lt;- mvrnorm(n = 10000, mu = mean_x_y, Sigma = cov_matrix, empirical = FALSE)
+colnames(x_y_data_matrix_practice) &lt;- c(&quot;x&quot;, &quot;y&quot;)
+x_y_data_practice &lt;- as.data.frame(x_y_data_matrix_practice)</code></pre>
+<p>Checking:</p>
+<pre class="r"><code>x_y_data_practice %&gt;% 
+  summarize(
+    corr = cor(x, y)
+            ) %&gt;%
+    return(corr)</code></pre>
+<pre><code>##        corr
+## 1 0.2003635</code></pre>
+<p>Okay, this worked well. It generated a correlation close to .20, and
+when I ran it again it was still very close to .20 but slightly
+different.</p>
+<p>Next I need to turn this into a function to generate x and y, for a
+given r and n. </p>
+<pre class="r"><code>simulate_individual_x_y &lt;- function(r,n) {
+ mean_x_y &lt;- c(0, 0)
+ cov_matrix &lt;- matrix(c(1, r, 
+                         r, 1), ncol = 2)
+ x_y_data_matrix &lt;- mvrnorm(n = n, mu = mean_x_y, Sigma = cov_matrix, empirical = FALSE)
+ colnames(x_y_data_matrix) &lt;- c(&quot;x&quot;, &quot;y&quot;)
+ x_y_data &lt;- as.data.frame(x_y_data_matrix)
+ df_name &lt;- paste0(&quot;individual_x_y_&quot;, r, &quot;_&quot;, n)
+ assign(df_name, x_y_data, envir = .GlobalEnv) 
+} </code></pre>
+<pre class="r"><code>simulate_individual_x_y(.20,1000)</code></pre>
+<pre class="r"><code>individual_x_y_0.2_1000 %&gt;% 
+  summarize(
+    corr = cor(x, y)
+            ) %&gt;%
+    return(corr)</code></pre>
+<pre><code>##        corr
+## 1 0.1888047</code></pre>
+<p>Okay, I tried this a bunch of times and got different correlations.
+They were all close to .20, but not as close as when I used n of 10,000.
+So this is working well.</p>
+<p>Unfortunately, that function just creates one correlation. I need a
+function that does this 10,000 times.</p>
+<p>I spent a while trying to do that, but I think I need to have it
+create the correlation as part of the function. I’m going to revise the
+function now.</p>
+<pre class="r"><code>final_simulate_individual_x_y &lt;- function(r,n) {
+ mean_x_y &lt;- c(0, 0)
+ cov_matrix &lt;- matrix(c(1, r, 
+                         r, 1), ncol = 2)
+ x_y_data_matrix &lt;- mvrnorm(n = n, mu = mean_x_y, Sigma = cov_matrix, empirical = FALSE)
+ colnames(x_y_data_matrix) &lt;- c(&quot;x&quot;, &quot;y&quot;)
+ x_y_data &lt;- as.data.frame(x_y_data_matrix)
+ df_name &lt;- paste0(&quot;individual_x_y_&quot;, r, &quot;_&quot;, n)
+ assign(df_name, x_y_data, envir = .GlobalEnv) 
+ calculated_corr &lt;- cor(x_y_data$x, x_y_data$y)
+ return(calculated_corr)
+} </code></pre>
+<pre class="r"><code>final_simulate_individual_x_y(.20,1000)</code></pre>
+<pre><code>## [1] 0.2287051</code></pre>
+<pre class="r"><code>simulate_repeated_x_y &lt;- function(r, n) {
+  correlations &lt;- replicate(10000, final_simulate_individual_x_y (r, n))
+  correlation_results &lt;- data.frame(id = 1:100, corr = correlations, pop_r = r, n = n)
+  df_name &lt;- paste0(&quot;simulated_r_from_xy&quot;, r, &quot;_&quot;, n)
+  assign(df_name, correlation_results, envir = .GlobalEnv) 
+}</code></pre>
+<pre class="r"><code>simulate_repeated_x_y(.20,50)</code></pre>
+<p>Okay, I’m now at the point where I was at when I just simulated the
+code directly, so I’ll use the same logic as before and just change the
+file names.</p>
+<pre class="r"><code>simulate_repeated_x_y(.10, 20)
+simulate_repeated_x_y(.10, 50)
+simulate_repeated_x_y(.10, 100)
+simulate_repeated_x_y(.20, 20)
+simulate_repeated_x_y(.20, 50)
+simulate_repeated_x_y(.20, 100)
+simulate_repeated_x_y(.30, 20)
+simulate_repeated_x_y(.30, 50)
+simulate_repeated_x_y(.30, 100)
+simulate_repeated_x_y(.40, 20)
+simulate_repeated_x_y(.40, 50)
+simulate_repeated_x_y(.40, 100)
+simulate_repeated_x_y(.50, 20)
+simulate_repeated_x_y(.50, 50)
+simulate_repeated_x_y(.50, 100)</code></pre>
+<p>now need to bind the data files .</p>
+<pre class="r"><code>simulated_data_final_xy &lt;- bind_rows(simulated_r_from_xy0.1_20, simulated_r_from_xy0.1_50, simulated_r_from_xy0.1_100, simulated_r_from_xy0.2_20, simulated_r_from_xy0.2_50, simulated_r_from_xy0.2_100, simulated_r_from_xy0.3_20, simulated_r_from_xy0.3_50, simulated_r_from_xy0.3_100, simulated_r_from_xy0.4_20, simulated_r_from_xy0.4_50, simulated_r_from_xy0.4_100, simulated_r_from_xy0.5_20, simulated_r_from_xy0.5_50, simulated_r_from_xy0.5_100)</code></pre>
+<p>Adding in the number of negative corrs.</p>
+<pre class="r"><code>simulated_data_final_xy &lt;- simulated_data_final_xy %&gt;%
+  mutate (neg_corr_xy = case_when (
+    corr &lt; 0 ~ 1, 
+    corr &gt;= 0 ~ 0 ))
+perc_neg_corr_final_xy &lt;- simulated_data_final_xy %&gt;%
+   group_by(pop_r, n) %&gt;%
+  summarize(perc_neg_xy = mean(neg_corr_xy))</code></pre>
+<p>Yea, this worked!! And the results are very similar to the ones when
+I simulated r directly, so that’s good reliability. I’m not sure to what
+extent the differences are due to chance or the more accurate approach
+in the later case, so I’ll use the latter approach.</p>
+<p>The last thing is to make some graphs. I’m going to make two
+types.</p>
+<p>One is to make histograms. I’ll do this for just the correlations of
+.20</p>
+<pre class="r"><code>simulated_data_final_xy_.20 &lt;- bind_rows(simulated_r_from_xy0.2_20, simulated_r_from_xy0.2_50, simulated_r_from_xy0.2_100)</code></pre>
+<pre class="r"><code>ggplot(data = simulated_data_final_xy_.20, mapping = aes(x = corr)) +
+  geom_histogram() + 
+  facet_grid (~ n) +
+  labs(title = &quot;Distribution of Sample Correlations, r = .20&quot;) +
+  scale_y_continuous(name = &quot;Count&quot;, breaks = NULL)</code></pre>
+<p><img src="p03_files/figure-html/creating-facted_histogram_for_.20-1.png" width="672" /></p>
+<p>That worked well. I’m not sure precisely what I’m going to do yet for
+class (whether pass out the above or something different), but it should
+be straightforward to adapt this to anything else.</p>
+<p>The second is to make a line graph for percentage of negative
+correlations. This is a little trickier.</p>
+<pre class="r"><code>ggplot(data = perc_neg_corr_final_xy, mapping = aes(x = pop_r, y = perc_neg_xy, group = n, color = factor(n))) +
+  geom_point() +
+  geom_line() +
+  labs(title = &quot;Percent Negative Sample Correlations per Population Correlation and n&quot;,
+       x = &quot;population correlation&quot;, y = &quot;% negative sample correlations&quot;, color = &quot;n&quot;)</code></pre>
+<p><img src="p03_files/figure-html/creating-line_graph-1.png" width="672" /></p>
+<p>Okay, cool. This worked well.</p>
+</div>
 
 
 
